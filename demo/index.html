@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gui-parser demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0e0e0e;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid #1f1f1f;
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    header span {
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* ── Main layout ── */
+    main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ── */
+    .left {
+      width: 340px;
+      flex-shrink: 0;
+      border-right: 1px solid #1f1f1f;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 20px;
+      gap: 20px;
+    }
+
+    .drop-zone {
+      border: 1.5px dashed #333;
+      border-radius: 12px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #0d99ff;
+      background: rgba(13, 153, 255, 0.05);
+    }
+    .drop-zone .icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    .drop-zone p {
+      font-size: 13px;
+      color: #888;
+      line-height: 1.5;
+    }
+    .drop-zone p strong {
+      color: #ccc;
+    }
+    .drop-zone input {
+      display: none;
+    }
+
+    /* ── File info ── */
+    .file-info {
+      display: none;
+      background: #161616;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 14px 16px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .file-info.visible { display: flex; }
+    .file-info .name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-info .meta {
+      display: flex;
+      gap: 16px;
+    }
+    .file-info .meta span {
+      font-size: 11px;
+      color: #555;
+    }
+    .file-info .meta span b {
+      color: #888;
+      font-weight: 500;
+    }
+
+    /* ── Stats ── */
+    .stats {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stats.visible { display: flex; }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 8px 12px;
+      background: #161616;
+      border-radius: 8px;
+      border: 1px solid #1e1e1e;
+    }
+    .stat-row .label { color: #666; }
+    .stat-row .value { color: #ccc; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    /* ── Error ── */
+    .error-box {
+      display: none;
+      background: #1a0a0a;
+      border: 1px solid #4a1515;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #e05555;
+      line-height: 1.6;
+    }
+    .error-box.visible { display: block; }
+
+    /* ── Right panel — JSON viewer ── */
+    .right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .json-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid #1a1a1a;
+      flex-shrink: 0;
+    }
+    .json-toolbar .section-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .tab-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #555;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    .tab-btn:hover { color: #aaa; }
+    .tab-btn.active {
+      background: #1e1e1e;
+      border-color: #2a2a2a;
+      color: #e0e0e0;
+    }
+    .copy-btn {
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid #2a2a2a;
+      background: #1a1a1a;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    .copy-btn:hover { color: #fff; border-color: #444; }
+
+    .json-output {
+      flex: 1;
+      overflow: auto;
+      padding: 16px 20px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 10px;
+      color: #333;
+      font-size: 13px;
+    }
+    .empty-state .big { font-size: 32px; }
+
+    /* ── Tree viewer ── */
+    .tree {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .tree-node { display: block; }
+    .tree-row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      padding: 1px 0;
+      border-radius: 4px;
+      cursor: default;
+      white-space: nowrap;
+    }
+    .tree-row:hover { background: #171717; }
+    .tree-row.clickable { cursor: pointer; }
+
+    .chevron {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #444;
+      font-style: normal;
+      transition: transform 0.12s;
+      user-select: none;
+      position: relative;
+      top: 1px;
+    }
+    .chevron.open { transform: rotate(90deg); color: #666; }
+    .chevron.leaf { color: transparent; }
+
+    .tree-children {
+      padding-left: 18px;
+      border-left: 1px solid #1e1e1e;
+      margin-left: 6px;
+    }
+    .tree-children.collapsed { display: none; }
+
+    .t-key    { color: #9ecbff; }
+    .t-str    { color: #a8d8a8; }
+    .t-num    { color: #f4b8a0; }
+    .t-bool   { color: #c792ea; }
+    .t-null   { color: #555; }
+    .t-punc   { color: #444; }
+    .t-preview { color: #444; font-style: italic; margin-left: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>gui-parser</h1>
+  <span>Drop a .gui file to inspect the parsed output</span>
+</header>
+
+<main>
+  <!-- Left: upload + stats -->
+  <div class="left">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">📦</div>
+      <p><strong>Drop a .gui file here</strong><br>or click to browse</p>
+      <input type="file" id="fileInput" accept=".gui" />
+    </div>
+
+    <div class="file-info" id="fileInfo">
+      <div class="name" id="fileName">—</div>
+      <div class="meta">
+        <span>Size: <b id="fileSize">—</b></span>
+        <span>Parsed in: <b id="parseTime">—</b></span>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="stats" id="stats">
+      <div class="stat-row"><span class="label">Name</span><span class="value" id="statName">—</span></div>
+      <div class="stat-row"><span class="label">Platform</span><span class="value" id="statPlatform">—</span></div>
+      <div class="stat-row"><span class="label">Version</span><span class="value" id="statVersion">—</span></div>
+      <div class="stat-row"><span class="label">Tokens</span><span class="value" id="statTokens">—</span></div>
+      <div class="stat-row"><span class="label">Fonts</span><span class="value" id="statFonts">—</span></div>
+      <div class="stat-row"><span class="label">Components</span><span class="value" id="statComponents">—</span></div>
+      <div class="stat-row"><span class="label">Assets</span><span class="value" id="statAssets">—</span></div>
+      <div class="stat-row"><span class="label">Root type</span><span class="value" id="statRoot">—</span></div>
+    </div>
+  </div>
+
+  <!-- Right: JSON output -->
+  <div class="right">
+    <div class="json-toolbar">
+      <div class="section-tabs">
+        <button class="tab-btn active" data-key="full">Full</button>
+        <button class="tab-btn" data-key="root">root</button>
+        <button class="tab-btn" data-key="tokens">tokens</button>
+        <button class="tab-btn" data-key="fonts">fonts</button>
+        <button class="tab-btn" data-key="styles">styles</button>
+        <button class="tab-btn" data-key="components">components</button>
+        <button class="tab-btn" data-key="assets">assets</button>
+      </div>
+      <button class="copy-btn" id="copyBtn">Copy JSON</button>
+    </div>
+
+    <div class="json-output" id="jsonOutput">
+      <div class="empty-state">
+        <div class="big">🗂</div>
+        <div>No file loaded yet</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- fflate for unzipping -->
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+
+<script>
+// ── Minimal gui-parser implementation (inline, no build step needed) ────────
+
+const NUMERIC_ATTRS = new Set([
+  'x','y','w','h','opacity','rotation','radius',
+  'font-size','font-weight','line-height','letter-spacing',
+  'arc-start','arc-end','arc-inner',
+  'border-width','min-width','max-width','min-height','max-height',
+  'columns','corner-smoothing','paragraph-spacing','paragraph-indent',
+  'pt','pr','pb','pl','max-lines',
+  'mask-x','mask-y','mask-width','mask-height',
+  'miter-limit','unit','col-span','row-span',
+])
+const BOOLEAN_ATTRS = new Set(['wrap','clip','mask','abs','truncate','reverse-z'])
+
+function coerce(key, value) {
+  if (value === 'true') return true
+  if (value === 'false') return false
+  if (BOOLEAN_ATTRS.has(key) && value === '') return true
+  if (NUMERIC_ATTRS.has(key)) {
+    if ((key === 'w' || key === 'h') && (value === 'fill' || value === 'hug')) return value
+    const n = Number(value)
+    return Number.isFinite(n) ? n : value
+  }
+  return value
+}
+
+function resolveToken(value, tokens) {
+  if (!value || !value.includes('$')) return value
+  return value.replace(/\$([A-Za-z0-9_.-]+)/g, (m, name) => tokens[name] ?? m)
+}
+
+function attrsToObject(el, tokens, fillStyles, textStyles) {
+  const obj = {}
+  for (let i = 0; i < el.attributes.length; i++) {
+    const { name, value } = el.attributes[i]
+    obj[name] = coerce(name, resolveToken(value, tokens))
+  }
+  const fsName = el.getAttribute('fill-style')
+  if (fsName && fillStyles[fsName] !== undefined) {
+    obj['fill'] = resolveToken(fillStyles[fsName], tokens)
+    delete obj['fill-style']
+  }
+  const tsName = el.getAttribute('text-style')
+  if (tsName && textStyles[tsName]) {
+    const style = textStyles[tsName]
+    for (const attr of Object.keys(style)) {
+      if (el.getAttribute(attr) === null) obj[attr] = coerce(attr, resolveToken(style[attr], tokens))
+    }
+    delete obj['text-style']
+  }
+  return obj
+}
+
+// Presence attrs normalization
+const PRESENCE = { abs:'true', clip:'true', gap:'auto', mask:'true', 'reverse-z':'true', truncate:'true', wrap:'true' }
+function normalizeTag(tag) {
+  let out = '', i = 0
+  while (i < tag.length) {
+    const ch = tag[i]
+    if (ch === '"' || ch === "'") {
+      const q = ch, s = i++
+      while (i < tag.length && tag[i] !== q) i++
+      if (i < tag.length) i++
+      out += tag.slice(s, i); continue
+    }
+    if (!/\s/.test(ch)) { out += ch; i++; continue }
+    const ws = i
+    while (i < tag.length && /\s/.test(tag[i])) i++
+    const ns = i
+    if (!/[A-Za-z]/.test(tag[i] || '')) { out += tag.slice(ws, i + 1); i++; continue }
+    while (i < tag.length && /[\w-]/.test(tag[i])) i++
+    const name = tag.slice(ns, i), after = tag[i], val = PRESENCE[name]
+    if (val && (/\s/.test(after || '') || after === '/' || after === '>'))
+      out += `${tag.slice(ws, ns)}${name}="${val}"`
+    else out += tag.slice(ws, i)
+  }
+  return out
+}
+function normalizeBooleanAttrs(code) {
+  let out = '', i = 0
+  while (i < code.length) {
+    const ts = code.indexOf('<', i)
+    if (ts === -1) { out += code.slice(i); break }
+    out += code.slice(i, ts)
+    if (code.startsWith('<!--', ts)) {
+      const e = code.indexOf('-->', ts + 4)
+      const end = e === -1 ? code.length : e + 3
+      out += code.slice(ts, end); i = end; continue
+    }
+    let te = ts + 1; let q = null
+    while (te < code.length) {
+      const c = code[te]
+      if (q) { if (c === q) q = null }
+      else if (c === '"' || c === "'") q = c
+      else if (c === '>') break
+      te++
+    }
+    const end = te < code.length ? te + 1 : code.length
+    const tag = code.slice(ts, end)
+    out += /^<\/|^<\?|^<!/.test(tag) ? tag : normalizeTag(tag)
+    i = end
+  }
+  return out
+}
+
+const TEXT_STYLE_ATTRS = [
+  'font-family','font-size','font-weight','font-style','font-variation','font-feature',
+  'line-height','letter-spacing','decoration','decoration-color','decoration-style',
+  'decoration-thickness','text-case',
+]
+const LAYOUT_TAGS = new Set(['frame','stack','row','col','grid','group'])
+const CONTENT_TAGS = new Set(['text','img','rect','ellipse','line','svg','shape','instance'])
+const CHILD_TAGS = new Set([...LAYOUT_TAGS, ...CONTENT_TAGS])
+
+function parseTokensSection(gui) {
+  const tokens = {}
+  for (const child of gui.children) {
+    if (child.tagName !== 'tokens') continue
+    for (const t of child.children) {
+      const name = t.getAttribute('name'), value = t.getAttribute('value')
+      if (name && value !== null) tokens[name] = value
+    }
+  }
+  return tokens
+}
+function parseFontsSection(gui) {
+  const fonts = {}
+  for (const block of gui.children) {
+    if (block.tagName !== 'fonts') continue
+    for (const f of block.children) {
+      if (f.tagName !== 'font') continue
+      const family = f.getAttribute('family'), source = f.getAttribute('source')
+      if (!family || !source) continue
+      fonts[family] = {
+        source,
+        category: f.getAttribute('category') || undefined,
+        weights: f.getAttribute('weights') || undefined,
+        styles: f.getAttribute('styles') || undefined,
+      }
+    }
+  }
+  return fonts
+}
+function parseTextStyles(gui) {
+  const styles = {}
+  for (const child of gui.children) {
+    if (child.tagName !== 'styles') continue
+    for (const s of child.children) {
+      if (s.tagName !== 'text-style') continue
+      const name = s.getAttribute('name')
+      if (!name) continue
+      const entry = {}
+      for (const attr of TEXT_STYLE_ATTRS) {
+        const v = s.getAttribute(attr)
+        if (v !== null) entry[attr] = v
+      }
+      styles[name] = entry
+    }
+  }
+  return styles
+}
+function parseFillStyles(gui) {
+  const result = {}
+  for (const child of gui.children) {
+    if (child.tagName !== 'styles') continue
+    for (const s of child.children) {
+      if (s.tagName !== 'fill-style') continue
+      const name = s.getAttribute('name'), value = s.getAttribute('value')
+      if (name && value !== null) result[name] = value
+    }
+  }
+  return result
+}
+function parseEffectStyles(gui, tokens) {
+  const result = {}
+  for (const child of gui.children) {
+    if (child.tagName !== 'styles') continue
+    for (const s of child.children) {
+      if (s.tagName !== 'effect-style') continue
+      const name = s.getAttribute('name')
+      if (!name) continue
+      result[name] = Array.from(s.children)
+        .filter(c => c.tagName === 'effect')
+        .map(c => {
+          const o = {}
+          for (let i = 0; i < c.attributes.length; i++) {
+            const { name: k, value: v } = c.attributes[i]
+            o[k] = coerce(k, resolveToken(v, tokens))
+          }
+          return o
+        })
+    }
+  }
+  return result
+}
+function parseAssetsSection(gui, zipAssets) {
+  if (Object.keys(zipAssets).length > 0) return zipAssets
+  const map = {}
+  for (const child of gui.children) {
+    if (child.tagName !== 'assets') continue
+    for (const img of child.children) {
+      if (img.tagName !== 'image') continue
+      const id = img.getAttribute('id'), format = img.getAttribute('format') || 'png'
+      const src = img.getAttribute('src') || ''
+      if (!id) continue
+      const mime = format === 'svg' ? 'svg+xml' : format
+      if (src.startsWith('base64:'))
+        map[`assets/${id}.${format}`] = `data:image/${mime};base64,${src.slice(7)}`
+      else if (src) map[`assets/${id}.${format}`] = src
+    }
+  }
+  return map
+}
+function parseEffectEl(el, tokens) {
+  const o = {}
+  for (let i = 0; i < el.attributes.length; i++) {
+    const { name: k, value: v } = el.attributes[i]
+    o[k] = coerce(k, resolveToken(v, tokens))
+  }
+  return o
+}
+function parseAppearanceEl(el, tokens, fillStyles, effectStyles, assets) {
+  const fills = [], effects = [], borders = []
+  for (const child of el.children) {
+    if (child.tagName === 'fill') {
+      const o = {}
+      for (let i = 0; i < child.attributes.length; i++) {
+        const { name: k, value: v } = child.attributes[i]
+        let r = resolveToken(v, tokens)
+        if (k === 'src') r = assets[r] || r
+        o[k] = coerce(k, r)
+      }
+      fills.push(o)
+    } else if (child.tagName === 'effect') {
+      effects.push(parseEffectEl(child, tokens))
+    } else if (child.tagName === 'border') {
+      const o = {}
+      for (let i = 0; i < child.attributes.length; i++) {
+        const { name: k, value: v } = child.attributes[i]
+        o[k] = coerce(k, resolveToken(v, tokens))
+      }
+      borders.push(o)
+    }
+  }
+  return { fills, effects, borders }
+}
+function parseNode(el, tokens, fillStyles, textStyles, effectStyles, assets) {
+  const nodeAttrs = attrsToObject(el, tokens, fillStyles, textStyles)
+  const srcVal = el.getAttribute('src')
+  if (srcVal && assets[srcVal]) nodeAttrs['src'] = assets[srcVal]
+  const esName = el.getAttribute('effect-style')
+  const node = { type: el.tagName, ...nodeAttrs }
+  if (esName) delete node['effect-style']
+
+  if (el.tagName === 'svg' && !el.getAttribute('src')) {
+    const s = new XMLSerializer()
+    const childEls = Array.from(el.children)
+    if (childEls.length > 0) {
+      let inner = ''
+      for (const c of childEls) inner += s.serializeToString(c)
+      node.svgContent = inner.replace(/\s+xmlns=""/g, '')
+    }
+    return node
+  }
+
+  const children = [], segments = [], paths = []
+  let appearance
+
+  for (const child of el.children) {
+    if (child.tagName === 'appearance') {
+      appearance = parseAppearanceEl(child, tokens, fillStyles, effectStyles, assets)
+    } else if (child.tagName === 'segment') {
+      segments.push({ type: 'segment', ...attrsToObject(child, tokens, fillStyles, textStyles) })
+    } else if (child.tagName === 'path') {
+      const d = child.getAttribute('d'); if (d) paths.push(d)
+    } else if (CHILD_TAGS.has(child.tagName)) {
+      children.push(parseNode(child, tokens, fillStyles, textStyles, effectStyles, assets))
+    }
+  }
+
+  if (esName && effectStyles[esName]) {
+    if (!appearance) appearance = { fills: [], effects: [], borders: [] }
+    appearance.effects = [...effectStyles[esName], ...appearance.effects]
+  }
+
+  if (appearance) node.appearance = appearance
+  if (segments.length) node.segments = segments
+  if (paths.length) node.paths = paths
+  if (children.length) node.children = children
+  return node
+}
+function parseComponentsSection(gui, tokens, fillStyles, textStyles, effectStyles, assets) {
+  const map = {}
+  for (const block of gui.children) {
+    if (block.tagName !== 'components') continue
+    for (const comp of block.children) {
+      if (comp.tagName === 'component') {
+        const id = comp.getAttribute('id'); if (!id) continue
+        const propsEl = Array.from(comp.children).find(c => c.tagName === 'props')
+        const bodyEl = Array.from(comp.children).find(c => c.tagName !== 'props')
+        map[id] = {
+          id,
+          props: propsEl ? parsePropsEl(propsEl) : [],
+          body: bodyEl ? parseNode(bodyEl, tokens, fillStyles, textStyles, effectStyles, assets) : null,
+        }
+      } else if (comp.tagName === 'component-set') {
+        const setId = comp.getAttribute('id'); if (!setId) continue
+        const variants = []
+        for (const v of comp.children) {
+          if (v.tagName !== 'variant') continue
+          const varId = v.getAttribute('id'); if (!varId) continue
+          const varAttrs = {}
+          for (let i = 0; i < v.attributes.length; i++) {
+            const { name, value } = v.attributes[i]
+            if (name !== 'id') varAttrs[name] = value
+          }
+          const bodyEl = Array.from(v.children).find(c => c.tagName !== 'props')
+          const propsEl = Array.from(v.children).find(c => c.tagName === 'props')
+          const body = bodyEl ? parseNode(bodyEl, tokens, fillStyles, textStyles, effectStyles, assets) : null
+          variants.push({ attrs: varAttrs, body })
+          map[varId] = { id: varId, props: propsEl ? parsePropsEl(propsEl) : [], body }
+        }
+        map[setId] = { id: setId, props: [], body: null, variants }
+      }
+    }
+  }
+  return map
+}
+function parsePropsEl(propsEl) {
+  const props = []
+  for (const p of propsEl.children) {
+    if (p.tagName !== 'prop') continue
+    const name = p.getAttribute('name'), type = p.getAttribute('type'), target = p.getAttribute('target')
+    if (!name || !type || !target) continue
+    const prop = { name, type, target }
+    const bind = p.getAttribute('bind'); if (bind) prop.bind = bind
+    props.push(prop)
+  }
+  return props
+}
+
+function bytesToBase64(bytes) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let result = '', len = bytes.length
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i], b1 = i+1 < len ? bytes[i+1] : 0, b2 = i+2 < len ? bytes[i+2] : 0
+    result += chars[b0>>2] + chars[((b0&3)<<4)|(b1>>4)]
+    result += i+1 < len ? chars[((b1&15)<<2)|(b2>>6)] : '='
+    result += i+2 < len ? chars[b2&63] : '='
+  }
+  return result
+}
+function mimeForExt(ext) {
+  if (ext === 'svg') return 'image/svg+xml'
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  return 'image/png'
+}
+
+function parseGuiBytes(bytes) {
+  // Unzip
+  let files
+  try { files = fflate.unzipSync(bytes) }
+  catch (e) { return { error: 'Failed to unzip: ' + e.message } }
+
+  // Find XML — the .gui zip contains a .guix entry (the XML) plus an assets/ folder
+  let xml = null
+  const zipAssets = {}
+  for (const path of Object.keys(files)) {
+    if (path.endsWith('.guix')) {
+      xml = new TextDecoder().decode(files[path])
+    } else if (path.startsWith('assets/')) {
+      const ext = path.split('.').pop() || 'png'
+      zipAssets[path] = `data:${mimeForExt(ext)};base64,${bytesToBase64(files[path])}`
+    }
+  }
+  if (!xml) return { error: 'No .guix XML entry found inside the .gui zip.\n\nFiles found: ' + Object.keys(files).join(', ') }
+
+  // Parse XML
+  let doc
+  try {
+    const sanitized = normalizeBooleanAttrs(xml).replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;')
+    doc = new DOMParser().parseFromString(sanitized, 'text/xml')
+    if (doc.querySelector('parsererror')) return { error: 'XML parse error: ' + doc.querySelector('parsererror').textContent }
+  } catch (e) { return { error: 'Parse failed: ' + e.message } }
+
+  const gui = doc.documentElement
+  if (gui.tagName !== 'gui') return { error: `Expected root tag <gui>, got <${gui.tagName}>` }
+
+  const tokens = parseTokensSection(gui)
+  const fonts = parseFontsSection(gui)
+  const textStyles = parseTextStyles(gui)
+  const fillStyles = parseFillStyles(gui)
+  const effectStyles = parseEffectStyles(gui, tokens)
+  const assets = parseAssetsSection(gui, zipAssets)
+  const components = parseComponentsSection(gui, tokens, fillStyles, textStyles, effectStyles, assets)
+
+  const STACK_TAGS = new Set(['stack','row','col','grid'])
+  let rootEl = null
+  for (const child of gui.children) {
+    if (child.tagName === 'frame' || STACK_TAGS.has(child.tagName)) { rootEl = child; break }
+  }
+
+  return {
+    result: {
+      version: gui.getAttribute('version'),
+      name: gui.getAttribute('name'),
+      platform: gui.getAttribute('platform'),
+      fonts,
+      tokens,
+      styles: textStyles,
+      fillStyles,
+      effectStyles,
+      components,
+      assets,
+      root: rootEl ? parseNode(rootEl, tokens, fillStyles, textStyles, effectStyles, assets) : null,
+    }
+  }
+}
+
+// ── UI ───────────────────────────────────────────────────────────────────────
+
+let currentResult = null
+let currentTab = 'full'
+
+const dropZone = document.getElementById('dropZone')
+const fileInput = document.getElementById('fileInput')
+const fileInfo = document.getElementById('fileInfo')
+const fileName = document.getElementById('fileName')
+const fileSize = document.getElementById('fileSize')
+const parseTime = document.getElementById('parseTime')
+const stats = document.getElementById('stats')
+const errorBox = document.getElementById('errorBox')
+const jsonOutput = document.getElementById('jsonOutput')
+const copyBtn = document.getElementById('copyBtn')
+
+dropZone.addEventListener('click', () => fileInput.click())
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]) })
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+dropZone.addEventListener('drop', e => {
+  e.preventDefault()
+  dropZone.classList.remove('drag-over')
+  const file = e.dataTransfer.files[0]
+  if (file) loadFile(file)
+})
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    currentTab = btn.dataset.key
+    if (currentResult) renderJson(currentResult)
+  })
+})
+
+copyBtn.addEventListener('click', () => {
+  if (!currentResult) return
+  const data = getTabData(currentResult)
+  const json = JSON.stringify(data, (k, v) => {
+    if (typeof v === 'string') return truncateB64(v)
+    return v
+  }, 2)
+  navigator.clipboard.writeText(json)
+  copyBtn.textContent = 'Copied!'
+  setTimeout(() => copyBtn.textContent = 'Copy JSON', 1500)
+})
+
+function formatBytes(n) {
+  if (n < 1024) return n + ' B'
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+  return (n / 1024 / 1024).toFixed(2) + ' MB'
+}
+
+function countNodes(node) {
+  if (!node) return 0
+  let count = 1
+  if (node.children) for (const c of node.children) count += countNodes(c)
+  return count
+}
+
+function loadFile(file) {
+  errorBox.classList.remove('visible')
+  stats.classList.remove('visible')
+  fileInfo.classList.remove('visible')
+
+  const reader = new FileReader()
+  reader.onload = e => {
+    const bytes = new Uint8Array(e.target.result)
+    const t0 = performance.now()
+    const { result, error } = parseGuiBytes(bytes)
+    const elapsed = (performance.now() - t0).toFixed(1)
+
+    fileName.textContent = file.name
+    fileSize.textContent = formatBytes(file.size)
+    parseTime.textContent = elapsed + 'ms'
+    fileInfo.classList.add('visible')
+
+    if (error) {
+      errorBox.textContent = error
+      errorBox.classList.add('visible')
+      jsonOutput.innerHTML = '<div class="empty-state"><div class="big">⚠️</div><div>Parse failed</div></div>'
+      return
+    }
+
+    currentResult = result
+
+    // Update stats
+    document.getElementById('statName').textContent = result.name || '—'
+    document.getElementById('statPlatform').textContent = result.platform || '—'
+    document.getElementById('statVersion').textContent = result.version || '—'
+    document.getElementById('statTokens').textContent = Object.keys(result.tokens).length
+    document.getElementById('statFonts').textContent = Object.keys(result.fonts).length
+    document.getElementById('statComponents').textContent = Object.keys(result.components).length
+    document.getElementById('statAssets').textContent = Object.keys(result.assets).length
+    document.getElementById('statRoot').textContent = result.root ? `<${result.root.type}>` : '—'
+    stats.classList.add('visible')
+
+    renderJson(result)
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function getTabData(result) {
+  if (currentTab === 'full') return result
+  if (currentTab === 'root') return result.root
+  if (currentTab === 'tokens') return result.tokens
+  if (currentTab === 'fonts') return result.fonts
+  if (currentTab === 'styles') return { styles: result.styles, fillStyles: result.fillStyles, effectStyles: result.effectStyles }
+  if (currentTab === 'components') return result.components
+  if (currentTab === 'assets') {
+    // Truncate base64 for display
+    const out = {}
+    for (const [k, v] of Object.entries(result.assets)) {
+      const b64 = v.indexOf('base64,')
+      out[k] = b64 !== -1 ? v.slice(0, b64 + 7) + '[' + Math.round((v.length - b64 - 7) * 0.75) + ' bytes]' : v
+    }
+    return out
+  }
+  return result
+}
+
+
+// ── Tree renderer ────────────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function truncateB64(val) {
+  if (typeof val !== 'string') return val
+  const b64 = val.indexOf('base64,')
+  if (b64 === -1 || val.length < 120) return val
+  return val.slice(0, b64 + 7) + '[' + Math.round((val.length - b64 - 7) * 0.75) + ' bytes]'
+}
+
+function valueHtml(val) {
+  val = truncateB64(val)
+  if (val === null) return '<span class="t-null">null</span>'
+  if (val === true)  return '<span class="t-bool">true</span>'
+  if (val === false) return '<span class="t-bool">false</span>'
+  if (typeof val === 'number') return `<span class="t-num">${val}</span>`
+  if (typeof val === 'string') return `<span class="t-str">"${esc(val)}"</span>`
+  return ''
+}
+
+function previewHtml(val) {
+  if (Array.isArray(val)) return `<span class="t-preview">[${val.length}]</span>`
+  if (val && typeof val === 'object') {
+    const keys = Object.keys(val)
+    const hint = keys.slice(0, 3).join(', ') + (keys.length > 3 ? '…' : '')
+    return `<span class="t-preview">{${hint}}</span>`
+  }
+  return ''
+}
+
+function buildTree(data, depth) {
+  if (data === null || typeof data !== 'object') {
+    const div = document.createElement('div')
+    div.className = 'tree-node'
+    div.innerHTML = `<div class="tree-row"><span class="chevron leaf">▶</span>${valueHtml(data)}</div>`
+    return div
+  }
+
+  const isArr = Array.isArray(data)
+  const entries = isArr ? data.map((v, i) => [i, v]) : Object.entries(data)
+  const container = document.createElement('div')
+  container.className = 'tree-node'
+
+  for (const [key, val] of entries) {
+    const hasChildren = val !== null && typeof val === 'object' && (
+      Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0
+    )
+
+    const node = document.createElement('div')
+    node.className = 'tree-node'
+
+    const row = document.createElement('div')
+    row.className = 'tree-row' + (hasChildren ? ' clickable' : '')
+
+    const chevron = document.createElement('span')
+    chevron.className = 'chevron' + (hasChildren ? ' open' : ' leaf')
+    chevron.textContent = '▶'
+
+    const keySpan = document.createElement('span')
+    keySpan.className = 't-key'
+    keySpan.textContent = isArr ? `[${key}]` : `"${key}"`
+
+    const colon = document.createElement('span')
+    colon.className = 't-punc'
+    colon.textContent = ': '
+
+    row.appendChild(chevron)
+    row.appendChild(keySpan)
+    row.appendChild(colon)
+
+    if (hasChildren) {
+      const preview = document.createElement('span')
+      preview.innerHTML = previewHtml(val)
+
+      const children = document.createElement('div')
+      children.className = 'tree-children'
+      children.appendChild(buildTree(val, depth + 1))
+
+      row.appendChild(preview)
+      row.addEventListener('click', () => {
+        const open = !children.classList.contains('collapsed')
+        children.classList.toggle('collapsed', open)
+        chevron.classList.toggle('open', !open)
+        preview.style.display = open ? '' : 'none'
+      })
+
+      node.appendChild(row)
+      node.appendChild(children)
+    } else {
+      const valSpan = document.createElement('span')
+      valSpan.innerHTML = valueHtml(truncateB64(val))
+      row.appendChild(valSpan)
+      node.appendChild(row)
+    }
+
+    container.appendChild(node)
+  }
+
+  return container
+}
+
+function renderJson(result) {
+  const data = getTabData(result)
+  jsonOutput.innerHTML = ''
+  const wrapper = document.createElement('div')
+  wrapper.className = 'tree'
+  wrapper.appendChild(buildTree(data, 0))
+  jsonOutput.appendChild(wrapper)
+}
+</script>
+</body>
+</html>
